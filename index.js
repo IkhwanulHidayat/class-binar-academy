@@ -1,10 +1,16 @@
-const fs = require('fs')
+//const fs = require('fs')
+require('dotenv').config()
 const express = require('express')
 const bodyParser = require('body-parser')
 const path = require('path')
 const app = express()
+
 app.use(bodyParser.urlencoded({ extended: false }))
 const session = require('express-session')
+
+const user = require('./model/user')
+const becrypt = require('bcrypt')
+
 const middlewareAuth = require('./middleware/middlewareAuth')
 
 app.use(
@@ -26,35 +32,34 @@ app.get('/login', middlewareAuth.isGuest, (req, res) => {
 })
 
 app.post('/login', middlewareAuth.isGuest, (req, res) => {
-  const { email, password } = req.body
-  const data = JSON.parse(fs.readFileSync('user.json'))
-  const user = data.find(
-    (item) => item.email === email && item.password === password,
-  )
-  if (user) {
-    req.session.user = user
-    res.redirect('/')
-  } else {
+  try {
+    const { email, password } = req.body
+    const userAcc = user.findOne({ email: email })
+    const validPassword = becrypt.compare(password, userAcc.password)
+    if (validPassword) {
+      req.session.user = userAcc
+      res.redirect('/')
+    } else {
+      res.redirect('/login')
+    }
+  } catch (error) {
     res.redirect('/login')
   }
 })
+
 app.get('/register', middlewareAuth.isGuest, (req, res) => {
   res.sendFile(path.join(__dirname + '/views/registerpage.html'))
 })
 
 app.post('/register', middlewareAuth.isGuest, (req, res) => {
-  const { email, password } = req.body
-  const user = JSON.parse(fs.readFileSync('user.json'))
-  const isAuth = user.find((item) => item.email === email)
-
-  if (isAuth) {
-    res.redirect('/register')
-  } else {
-    const id = user.length + 1
-    user.push({ id: id, email, password })
-    const data = JSON.stringify(user)
-    fs.writeFileSync('user.json', data)
+  try {
+    const { email, password } = req.body
+    const salt = becrypt.genSalt(10)
+    const hashPassword = becrypt.hash(password, salt)
+    user.create({ email: email, password: hashPassword })
     res.redirect('/login')
+  } catch (error) {
+    res.redirect('/register')
   }
 })
 
